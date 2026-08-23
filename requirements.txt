@@ -1,0 +1,7 @@
+# CasePilot — requirements.txt
+#
+# Foundation stage: the project currently uses Python's standard library only.
+# No third-party packages are required at this stage.
+#
+# Third-party dependencies will be added here as each layer is implemented
+# (e.g. LLM client, structured-output library, test framework).

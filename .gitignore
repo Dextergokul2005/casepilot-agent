@@ -1,0 +1,54 @@
+# ── Python bytecode ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+virtualenv/
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+*.env
+
+# ── Distribution / packaging ──────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+
+# ── IDE / editor files ────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# ── Testing & coverage cache ──────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.log
+
+# ── Runtime logs & output artifacts ──────────────────────────────────────────
+output/escalations/*
+output/handoffs/*
+audit/*.log
+*.log
+
+# Keep output sub-directory placeholders tracked by git
+!output/escalations/.gitkeep
+!output/handoffs/.gitkeep
+
+# ── macOS / Windows system files ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
