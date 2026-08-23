@@ -1,0 +1,86 @@
+{
+  "policy_reference": "ACA-2026/1",
+  "effective_from": "2026-03-01",
+  "rules": [
+    {
+      "rule_id": "3.1",
+      "policy_reference": "ACA-2026/1",
+      "description": "Changes to entitlement, award amount, or eligibility status.",
+      "outcome": "ESCALATE",
+      "stop_current_action": true,
+      "source": "ACA-2026/1 section 3.1"
+    },
+    {
+      "rule_id": "3.2",
+      "policy_reference": "ACA-2026/1",
+      "description": "Suspension, termination, or reinstatement of an award.",
+      "outcome": "ESCALATE",
+      "stop_current_action": true,
+      "source": "ACA-2026/1 section 3.2"
+    },
+    {
+      "rule_id": "3.3",
+      "policy_reference": "ACA-2026/1",
+      "description": "Initiation, alteration, or cancellation of a payment.",
+      "outcome": "ESCALATE",
+      "stop_current_action": true,
+      "source": "ACA-2026/1 section 3.3"
+    },
+    {
+      "rule_id": "3.4",
+      "policy_reference": "ACA-2026/1",
+      "description": "Changes to payment details.",
+      "outcome": "ESCALATE",
+      "stop_current_action": true,
+      "source": "ACA-2026/1 section 3.4"
+    },
+    {
+      "rule_id": "3.5",
+      "policy_reference": "ACA-2026/1",
+      "description": "Communication sent to a resident or third party.",
+      "outcome": "ESCALATE",
+      "stop_current_action": true,
+      "source": "ACA-2026/1 section 3.5"
+    },
+    {
+      "rule_id": "3.6",
+      "policy_reference": "ACA-2026/1",
+      "description": "Disclosure of resident information outside the Department.",
+      "outcome": "ESCALATE",
+      "stop_current_action": true,
+      "source": "ACA-2026/1 section 3.6"
+    },
+    {
+      "rule_id": "3.7",
+      "policy_reference": "ACA-2026/1",
+      "description": "Creation of a record asserting a finding of fact about resident conduct, including suspected fraud or misrepresentation.",
+      "outcome": "ESCALATE",
+      "stop_current_action": true,
+      "source": "ACA-2026/1 section 3.7"
+    },
+    {
+      "rule_id": "3.8",
+      "policy_reference": "ACA-2026/1",
+      "description": "Actions that cannot be reversed by the Department acting alone.",
+      "outcome": "ESCALATE",
+      "stop_current_action": true,
+      "source": "ACA-2026/1 section 3.8"
+    },
+    {
+      "rule_id": "3.9",
+      "policy_reference": "ACA-2026/2",
+      "description": "Drafting a triage note for a household that includes a person under 18.",
+      "outcome": "HANDOFF",
+      "stop_current_action": true,
+      "source": "ACA-2026/2 section 3.9"
+    },
+    {
+      "rule_id": "6.1",
+      "policy_reference": "ACA-2026/1",
+      "description": "Where it is unclear whether an action falls within section 3, treat it as restricted.",
+      "outcome": "ESCALATE",
+      "stop_current_action": true,
+      "source": "ACA-2026/1 section 6.1"
+    }
+  ]
+}
