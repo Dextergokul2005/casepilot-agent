@@ -3,8 +3,8 @@ tests/test_caseworker_agent.py
 
 Unit tests for agent/caseworker_agent.py.
 
-All tests use mocks/fakes to ensure complete test isolation without
-relying on real network services or disk artifacts.
+All tests use mocks/fakes and temporary directories to ensure complete test isolation
+without relying on real network services or disk artifacts.
 
 Run with:
     python -m pytest tests/test_caseworker_agent.py -v
@@ -12,8 +12,11 @@ Run with:
     python tests/test_caseworker_agent.py
 """
 
+import json
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock
 
@@ -77,6 +80,9 @@ def _make_decision(outcome=ALLOW, rule_id="") -> PolicyDecision:
 class TestCaseworkerAgent(unittest.TestCase):
 
     def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.triage_dir = os.path.join(self.temp_dir, "triage")
+
         self.mock_loader = MagicMock()
         self.mock_builder = MagicMock()
         self.mock_evaluator = MagicMock()
@@ -91,7 +97,12 @@ class TestCaseworkerAgent(unittest.TestCase):
             case_router=self.mock_router,
             triage_generator=self.mock_generator,
             audit_tracer=self.mock_tracer,
+            triage_output_dir=self.triage_dir,
         )
+
+    def tearDown(self):
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     # ------------------------------------------------------------------
     # 1 - 4. Pipeline Execution & Collaborator Invocations
@@ -116,29 +127,46 @@ class TestCaseworkerAgent(unittest.TestCase):
         self.assertEqual(result["outcome"], ALLOW)
 
     # ------------------------------------------------------------------
-    # 5. ALLOW invokes TriageGenerator
+    # 5. ALLOW invokes TriageGenerator, persists output, and logs audit
     # ------------------------------------------------------------------
-    def test_allow_invokes_triage_generator(self):
-        referral = _make_referral()
+    def test_allow_invokes_triage_generator_and_persists_artifact(self):
+        referral = _make_referral(referral_id="RF-ALLOW-PERSIST")
         context = _make_context(referral)
         decision = _make_decision(outcome=ALLOW)
 
         self.mock_builder.build.return_value = context
         self.mock_evaluator.evaluate.return_value = decision
         self.mock_router.route.return_value = {"status": ALLOW}
-        self.mock_generator.generate.return_value = {"draft": "Triage Note Content"}
+        self.mock_generator.generate.return_value = {
+            "referral_id": "RF-ALLOW-PERSIST",
+            "policy_outcome": ALLOW,
+            "draft_status": "PROPOSED_FOR_CASEWORKER_REVIEW",
+        }
 
         result = self.agent.process_referral(referral)
 
         self.mock_generator.generate.assert_called_once_with(context, decision)
         self.assertIsNotNone(result["triage_note"])
-        self.assertEqual(result["triage_note"]["draft"], "Triage Note Content")
+        self.assertIsNotNone(result["triage_file"])
+
+        expected_file = os.path.join(self.triage_dir, "RF-ALLOW-PERSIST.json")
+        self.assertTrue(os.path.exists(expected_file))
+        with open(expected_file, "r", encoding="utf-8") as f:
+            saved_data = json.load(f)
+        self.assertEqual(saved_data["referral_id"], "RF-ALLOW-PERSIST")
+        self.assertEqual(saved_data["policy_outcome"], ALLOW)
+
+        self.mock_tracer.log_triage_generated.assert_called_once_with(
+            referral_id="RF-ALLOW-PERSIST",
+            resident_ref=referral.resident_ref,
+            destination=expected_file,
+        )
 
     # ------------------------------------------------------------------
-    # 6. HANDOFF does NOT invoke TriageGenerator
+    # 6. HANDOFF does NOT invoke TriageGenerator or write to triage dir
     # ------------------------------------------------------------------
     def test_handoff_does_not_invoke_triage_generator(self):
-        referral = _make_referral()
+        referral = _make_referral(referral_id="RF-HANDOFF-NO-TRIAGE")
         context = _make_context(referral)
         decision = _make_decision(outcome=HANDOFF, rule_id="3.9")
 
@@ -150,13 +178,15 @@ class TestCaseworkerAgent(unittest.TestCase):
 
         self.mock_generator.generate.assert_not_called()
         self.assertIsNone(result["triage_note"])
+        self.assertIsNone(result["triage_file"])
         self.assertEqual(result["outcome"], HANDOFF)
+        self.assertFalse(os.path.exists(os.path.join(self.triage_dir, "RF-HANDOFF-NO-TRIAGE.json")))
 
     # ------------------------------------------------------------------
-    # 7. ESCALATE does NOT invoke TriageGenerator
+    # 7. ESCALATE does NOT invoke TriageGenerator or write to triage dir
     # ------------------------------------------------------------------
     def test_escalate_does_not_invoke_triage_generator(self):
-        referral = _make_referral()
+        referral = _make_referral(referral_id="RF-ESCALATE-NO-TRIAGE")
         context = _make_context(referral)
         decision = _make_decision(outcome=ESCALATE, rule_id="3.1")
 
@@ -168,7 +198,9 @@ class TestCaseworkerAgent(unittest.TestCase):
 
         self.mock_generator.generate.assert_not_called()
         self.assertIsNone(result["triage_note"])
+        self.assertIsNone(result["triage_file"])
         self.assertEqual(result["outcome"], ESCALATE)
+        self.assertFalse(os.path.exists(os.path.join(self.triage_dir, "RF-ESCALATE-NO-TRIAGE.json")))
 
     # ------------------------------------------------------------------
     # 8 - 10. Structured Result Returned Correctly for All Outcomes
@@ -214,6 +246,7 @@ class TestCaseworkerAgent(unittest.TestCase):
         ]
         self.mock_evaluator.evaluate.side_effect = decisions
         self.mock_router.route.side_effect = lambda ctx, dec: {"status": dec.outcome}
+        self.mock_generator.generate.return_value = {"referral_id": "RF-1", "draft_status": "PROPOSED"}
 
         summary = self.agent.run_morning_queue()
 
@@ -239,6 +272,7 @@ class TestCaseworkerAgent(unittest.TestCase):
         ]
         self.mock_evaluator.evaluate.return_value = _make_decision(outcome=ALLOW)
         self.mock_router.route.return_value = {"status": ALLOW}
+        self.mock_generator.generate.return_value = {"referral_id": "RF-SUCCESS-2"}
 
         summary = self.agent.run_morning_queue()
 
@@ -259,6 +293,7 @@ class TestCaseworkerAgent(unittest.TestCase):
         self.mock_builder.build.return_value = context
         self.mock_evaluator.evaluate.return_value = decision
         self.mock_router.route.return_value = {"status": ALLOW, "destination": None}
+        self.mock_generator.generate.return_value = {"draft": "content"}
 
         self.agent.process_referral(referral)
 
@@ -266,6 +301,7 @@ class TestCaseworkerAgent(unittest.TestCase):
         self.mock_tracer.log_context_retrieved.assert_called_once_with(context)
         self.mock_tracer.log_policy_decision.assert_called_once()
         self.mock_tracer.log_routing.assert_called_once()
+        self.mock_tracer.log_triage_generated.assert_called_once()
 
     # ------------------------------------------------------------------
     # 15. Audit trace is persisted after queue processing
@@ -275,6 +311,7 @@ class TestCaseworkerAgent(unittest.TestCase):
         self.mock_builder.build.return_value = _make_context(_make_referral())
         self.mock_evaluator.evaluate.return_value = _make_decision(outcome=ALLOW)
         self.mock_router.route.return_value = {"status": ALLOW}
+        self.mock_generator.generate.return_value = {"draft": "ok"}
 
         self.agent.run_morning_queue()
 

@@ -8,6 +8,7 @@ Run with:
     python main.py
 """
 
+import os
 import sys
 from typing import Any, Dict
 
@@ -48,6 +49,7 @@ def build_agent(
         case_router=case_router,
         triage_generator=triage_generator,
         audit_tracer=audit_tracer,
+        triage_output_dir=os.path.join(output_root, "triage"),
     )
 
 

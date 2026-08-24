@@ -36,6 +36,7 @@ EVENT_REFERRAL_INGESTED = "REFERRAL_INGESTED"
 EVENT_CONTEXT_RETRIEVED = "CONTEXT_RETRIEVED"
 EVENT_POLICY_EVALUATED = "POLICY_EVALUATED"
 EVENT_CASE_ROUTED = "CASE_ROUTED"
+EVENT_TRIAGE_GENERATED = "TRIAGE_GENERATED"
 
 
 class AuditTracer:
@@ -187,6 +188,27 @@ class AuditTracer:
             referral_id=referral_id,
             resident_ref=resident_ref,
             outcome=outcome,
+            destination=destination,
+            details=extra_details,
+        )
+
+    def log_triage_generated(
+        self,
+        referral_id: str,
+        resident_ref: str,
+        destination: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Log a TRIAGE_GENERATED event for ALLOW cases."""
+        extra_details = {}
+        if details:
+            extra_details.update(details)
+
+        return self.log_event(
+            event_type=EVENT_TRIAGE_GENERATED,
+            referral_id=referral_id,
+            resident_ref=resident_ref,
+            outcome="ALLOW",
             destination=destination,
             details=extra_details,
         )

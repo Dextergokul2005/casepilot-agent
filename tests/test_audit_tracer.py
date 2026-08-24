@@ -153,6 +153,23 @@ class TestAuditTracer(unittest.TestCase):
         self.assertEqual(event["outcome"], ESCALATE)
 
     # ------------------------------------------------------------------
+    # 4b. Triage generation event records destination and ALLOW outcome
+    # ------------------------------------------------------------------
+    def test_log_triage_generated_records_event(self):
+        dest = "/path/to/output/triage/RF-TRIAGE-1.json"
+        event = self.tracer.log_triage_generated(
+            referral_id="RF-TRIAGE-1",
+            resident_ref="R-20500",
+            destination=dest,
+        )
+
+        self.assertEqual(event["event_type"], "TRIAGE_GENERATED")
+        self.assertEqual(event["destination"], dest)
+        self.assertEqual(event["outcome"], "ALLOW")
+        self.assertEqual(event["referral_id"], "RF-TRIAGE-1")
+        self.assertEqual(event["resident_ref"], "R-20500")
+
+    # ------------------------------------------------------------------
     # 5. Events contain required canonical keys
     # ------------------------------------------------------------------
     def test_events_contain_canonical_keys(self):

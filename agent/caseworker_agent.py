@@ -10,7 +10,7 @@ Responsibilities
 - Processes individual referrals (process_referral).
 - Processes the full morning queue (run_morning_queue).
 - Maintains strict authority boundaries:
-    ALLOW    -> CaseRouter + TriageGenerator
+    ALLOW    -> CaseRouter + TriageGenerator (persisted to output/triage/{referral_id}.json)
     HANDOFF  -> CaseRouter (output/handoffs/) [TriageGenerator forbidden]
     ESCALATE -> CaseRouter (output/escalations/) [TriageGenerator forbidden]
 - Persists unbroken execution traces via AuditTracer.
@@ -23,7 +23,10 @@ Architecture constraints
 - No network requests.
 """
 
-from typing import Any, Dict, List
+import json
+import os
+import tempfile
+from typing import Any, Dict, List, Optional
 
 from models.policy_decision import ALLOW, ESCALATE, HANDOFF
 from models.referral import Referral
@@ -47,6 +50,9 @@ class CaseworkerAgent:
         Service generating draft triage notes for ALLOW cases only.
     audit_tracer : AuditTracer
         Audit logger recording lifecycle execution traces.
+    triage_output_dir : str
+        Directory where ALLOW draft triage notes will be persisted.
+        Defaults to "output/triage".
     """
 
     def __init__(
@@ -57,6 +63,7 @@ class CaseworkerAgent:
         case_router,
         triage_generator,
         audit_tracer,
+        triage_output_dir: str = "output/triage",
     ):
         self.referral_loader = referral_loader
         self.context_builder = context_builder
@@ -64,6 +71,7 @@ class CaseworkerAgent:
         self.case_router = case_router
         self.triage_generator = triage_generator
         self.audit_tracer = audit_tracer
+        self.triage_output_dir = triage_output_dir
 
     def process_referral(self, referral: Referral) -> Dict[str, Any]:
         """
@@ -110,8 +118,16 @@ class CaseworkerAgent:
 
             # 5. Triage Generation (Strictly ALLOW only)
             triage_note = None
+            triage_file = None
             if decision.outcome == ALLOW:
                 triage_note = self.triage_generator.generate(context, decision)
+                triage_file = os.path.join(self.triage_output_dir, f"{referral_id}.json")
+                self._write_json_atomically(triage_file, triage_note)
+                self.audit_tracer.log_triage_generated(
+                    referral_id=referral_id,
+                    resident_ref=resident_ref,
+                    destination=triage_file,
+                )
 
             return {
                 "status": "SUCCESS",
@@ -121,6 +137,7 @@ class CaseworkerAgent:
                 "policy_decision": decision.to_dict(),
                 "routing": routing_result,
                 "triage_note": triage_note,
+                "triage_file": triage_file,
                 "error": None,
             }
 
@@ -140,6 +157,7 @@ class CaseworkerAgent:
                 "policy_decision": None,
                 "routing": None,
                 "triage_note": None,
+                "triage_file": None,
                 "error": str(exc),
             }
 
@@ -185,3 +203,31 @@ class CaseworkerAgent:
             "failed_count": failed_count,
             "results": results,
         }
+
+    def _write_json_atomically(self, target_path: str, data: Dict[str, Any]) -> None:
+        """
+        Safely and atomically writes JSON data to the target path.
+        Creates parent directories if they do not exist.
+        """
+        target_dir = os.path.dirname(target_path)
+        os.makedirs(target_dir, exist_ok=True)
+
+        temp_fd, temp_path = tempfile.mkstemp(
+            dir=target_dir,
+            prefix="tmp_triage_",
+            suffix=".json",
+            text=True,
+        )
+        try:
+            with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, target_path)
+        except Exception:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+            raise

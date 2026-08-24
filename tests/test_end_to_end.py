@@ -92,6 +92,7 @@ class TestEndToEndCasePilot(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.output_root = os.path.join(self.temp_dir, "output")
+        self.triage_dir = os.path.join(self.output_root, "triage")
         self.audit_log_path = os.path.join(self.temp_dir, "audit", "trace.json")
 
         # Create temporary referral queue file
@@ -156,6 +157,7 @@ class TestEndToEndCasePilot(unittest.TestCase):
             case_router=self.case_router,
             triage_generator=self.triage_generator,
             audit_tracer=self.audit_tracer,
+            triage_output_dir=self.triage_dir,
         )
 
     def tearDown(self):
@@ -213,15 +215,27 @@ class TestEndToEndCasePilot(unittest.TestCase):
         self.assertIsNotNone(allow_res["triage_note"])
         self.assertEqual(allow_res["triage_note"]["draft_status"], "PROPOSED_FOR_CASEWORKER_REVIEW")
         self.assertEqual(allow_res["triage_note"]["referral_id"], "RF-TEST-001")
+        self.assertEqual(allow_res["triage_note"]["resident_ref"], "R-ALLOW-1")
+        self.assertEqual(allow_res["triage_note"]["policy_outcome"], ALLOW)
+
+        # 2 & 4 & 5. ALLOW artifact persisted under output/triage/
+        triage_file = os.path.join(self.triage_dir, "RF-TEST-001.json")
+        self.assertTrue(os.path.exists(triage_file))
+        with open(triage_file, "r", encoding="utf-8") as f:
+            t_data = json.load(f)
+        self.assertEqual(t_data["referral_id"], "RF-TEST-001")
+        self.assertEqual(t_data["resident_ref"], "R-ALLOW-1")
+        self.assertEqual(t_data["policy_outcome"], ALLOW)
 
         # 7. ALLOW does not create file artifacts in handoffs or escalations
         self.assertFalse(os.path.exists(os.path.join(self.output_root, "handoffs", "RF-TEST-001.json")))
         self.assertFalse(os.path.exists(os.path.join(self.output_root, "escalations", "RF-TEST-001.json")))
 
-        # 3 & 5. Check HANDOFF case (RF-TEST-002: under-18 child)
+        # 3 & 5 & 7. Check HANDOFF case (RF-TEST-002: under-18 child)
         handoff_res = summary["results"][1]
         self.assertEqual(handoff_res["outcome"], HANDOFF)
         self.assertIsNone(handoff_res["triage_note"])  # Must NOT draft note
+        self.assertFalse(os.path.exists(os.path.join(self.triage_dir, "RF-TEST-002.json")))
         handoff_file = os.path.join(self.output_root, "handoffs", "RF-TEST-002.json")
         self.assertTrue(os.path.exists(handoff_file))
         with open(handoff_file, "r", encoding="utf-8") as f:
@@ -229,10 +243,11 @@ class TestEndToEndCasePilot(unittest.TestCase):
         self.assertEqual(h_data["rule_id"], "3.9")
         self.assertEqual(h_data["policy_reference"], "ACA-2026/2")
 
-        # 4 & 6. Check ESCALATE case (RF-TEST-003: change award amount)
+        # 4 & 6 & 8. Check ESCALATE case (RF-TEST-003: change award amount)
         escalate_res = summary["results"][2]
         self.assertEqual(escalate_res["outcome"], ESCALATE)
         self.assertIsNone(escalate_res["triage_note"])  # Must NOT draft note
+        self.assertFalse(os.path.exists(os.path.join(self.triage_dir, "RF-TEST-003.json")))
         escalate_file = os.path.join(self.output_root, "escalations", "RF-TEST-003.json")
         self.assertTrue(os.path.exists(escalate_file))
         with open(escalate_file, "r", encoding="utf-8") as f:
@@ -260,6 +275,14 @@ class TestEndToEndCasePilot(unittest.TestCase):
         self.assertIn("CONTEXT_RETRIEVED", event_types)
         self.assertIn("POLICY_EVALUATED", event_types)
         self.assertIn("CASE_ROUTED", event_types)
+        self.assertIn("TRIAGE_GENERATED", event_types)
+
+        # Verify details of TRIAGE_GENERATED event
+        triage_event = [e for e in events if e.get("event_type") == "TRIAGE_GENERATED"][0]
+        self.assertEqual(triage_event["referral_id"], "RF-TEST-001")
+        self.assertEqual(triage_event["resident_ref"], "R-ALLOW-1")
+        self.assertEqual(triage_event["outcome"], ALLOW)
+        self.assertTrue(triage_event["destination"].endswith("RF-TEST-001.json"))
 
     # ------------------------------------------------------------------
     # 10. Multiple referrals processed independently
@@ -308,6 +331,7 @@ class TestEndToEndCasePilot(unittest.TestCase):
             case_router=self.case_router,
             triage_generator=self.triage_generator,
             audit_tracer=self.audit_tracer,
+            triage_output_dir=self.triage_dir,
         )
 
         summary = agent.run_morning_queue()
