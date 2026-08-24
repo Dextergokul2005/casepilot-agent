@@ -52,3 +52,6 @@ audit/*.log
 # ── macOS / Windows system files ──────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+
+output/triage/*
+audit/execution_trace.json
